@@ -775,7 +775,7 @@ class FPDF(object):
             sprintf('q %.2F %.2F %.2F %.2F re W n',
                     x * self.k,
                     (self.h - y) * self.k,
-                    w * self.k, -h * self.k,
+                    w * self.k, h * self.k,
                     )
         )
         self.text(x, y, txt)
