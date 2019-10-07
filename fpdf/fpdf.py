@@ -770,7 +770,7 @@ class FPDF(object):
         self._out(s)
 
     @check_page
-    def _clipped_text(self, x, y, w, h, txt=''):
+    def clipped_text(self, x, y, w, h, txt=''):
         from fpdf.php import sprintf
         self._out(
             sprintf('q %.2F %.2F %.2F %.2F re W n',
