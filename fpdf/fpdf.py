@@ -750,6 +750,18 @@ class FPDF(object):
         )]
 
     @check_page
+    def clipped_text(self, x, y, w, h, txt=''):
+        self._out(
+            sprintf('q %.2F %.2F %.2F %.2F re W S',
+                    x * self.k,
+                    (self.h-y) * self.k,
+                    w * self.k, - h * self.k,
+                    )
+        )
+        self._out("Q")
+
+
+    @check_page
     def text(self, x, y, txt = ''):
         "Output a string"
         txt = self.normalize_text(txt)
@@ -1187,9 +1199,168 @@ class FPDF(object):
         if (link):
             self.link(x, y, w, h, link)
 
+
+    """
+        Adapted from http://www.fpdf.org/en/script/script84.php
+    """
+    @check_page
+    def eps(self, src, x, y, w, h, use_bounding_box=True, link =''):
+        m = re.search(r'%%Creator:([^\r\n]+)', src)
+        if m:
+            version_str = m.group().strip()  # e.g. "Adobe Illustrator(R) 8.0"
+            if 'Adobe Illustrator' in version_str:
+                a = version_str[(version_str.find('Adobe Illustrator')+17):].split()
+                # TODO: check how the header looks, most likely we need to "cut" the version_str in advance !
+                version = float(a[-1])
+                if version >= 9:
+                    raise Exception('EPS source was saved with wrong Illustrator version')
+
+            # strip binary bytes in front of PS-header
+            start = src.find('%!PS-Adobe')
+            if start > 0:
+                src = src[start:]
+
+            # find BoundingBox params
+            bbox = re.findall(r'%%BoundingBox:([^\r\n]+)', src)
+            if len(bbox) >= 1:
+                bbox = [float(coord) for coord in bbox[0].strip().split()]
+            else:
+                raise Exception('No BoundingBox found in EPS source')
+
+            start = src.find('%%EndPageSetup')
+            if start == -1:
+                start = src.find('%%EndSetup')
+            if start == -1:
+                start = src.find('%%EndProlog')
+            if start == -1:
+                start = src.find('%%BoundingBox')
+
+            src = src[start:]
+
+            end = src.find('%%PageTrailer')
+            if end == -1:
+                end = src.find('showpage')
+            if end:
+                src = src[0:end]
+
+            # save the current graphic state
+            self._out(sprintf('q'))
+
+            k = self.k
+
+            if use_bounding_box:
+                dx = x * k-bbox[0]
+                dy = y * k-bbox[1]
+            else:
+                dx = x * k
+                dy = y * k
+
+            # translate
+            self._out(sprintf(
+                '%.3F %.3F %.3F %.3F %.3F %.3F cm',
+                1,
+                0,
+                0,
+                1,
+                dx,
+                dy + (self.h_pt - 2 * y * k - (bbox[3]-bbox[1]))
+            ))
+
+            scale_x = 0
+            scale_y = 0
+
+            if w > 0:
+                scale_x = w / ((bbox[2]-bbox[0]) / k)
+                if h > 0:
+                    scale_y = h / ((bbox[3]-bbox[1]) / k)
+                else:
+                    scale_y = scale_x
+                    h = (bbox[3]-bbox[1]) / k * scale_y
+            else:
+                if h > 0:
+                    scale_y = h / ((bbox[3]-bbox[1]) / k)
+                    scale_x = scale_y
+                    w = (bbox[2]-bbox[0]) / k * scale_x
+                else:
+                    w = (bbox[2]-bbox[0]) / k
+                    h = (bbox[3]-bbox[1]) / k
+
+            # scale
+            # TODO: original code does NOT initialize scale_x nor scale_y !!!
+            if scale_x:
+                self._out(sprintf(
+                    '%.3F %.3F %.3F %.3F %.3F %.3F cm',
+                    scale_x,
+                    0,
+                    0,
+                    scale_y,
+                    bbox[0] * (1 - scale_x),
+                    bbox[3] * (1 - scale_y)
+                ))
+
+            # handle pc/unix/mac line endings
+            lines = re.split(r"\r\n|[\r\n]", src)[1:]
+            lines = ' '.join(lines)
+            lchunks = [l.strip() for l in re.split(r"((?<=[a-z]|[A-Z]){1,})\s+", lines)]
+
+            u = 0
+            i = -1
+            for line in lchunks:
+                i += 1
+                if line == '' or line[0] == '%':
+                    continue
+
+                chunks = line.split()
+
+                if not len(chunks):
+                    continue
+
+                cmd = chunks[-1]
+
+                # RGB
+                if cmd == 'Xa' or cmd =='XA':
+                    r, g, b = chunks[1:4]
+                    self._out("%s %s %s %s" % (r,g,b, 'rg' if cmd=='Xa' else 'RG'))
+                elif cmd in ['m', 'l', 'v', 'y', 'c', 'k', 'K', 'g', 'G', 's', 'S', 'j', 'J', 'w', 'M', 'd', 'n', 'v']:
+                    self._out(line)
+                elif cmd == 'x':
+                    self._out("%s %s %s %s k" % chunks[1:])
+                elif cmd == 'X':
+                    self._out("%s %s %s %s K" % chunks[1:])
+                elif cmd in ['Y', 'N', 'V', 'L', 'C']:
+                    line[-1] = cmd.lower()
+                    self._out(line)
+                elif cmd in ['b', 'B']:
+                    self._out(cmd+'*')
+                elif cmd in ['f', 'F']:
+                    if u > 0:
+                        is_u = False
+                        max = min(i+5, len(lines))
+                        for j in range(i+1, max):
+                            is_u = is_u or lines[j] == 'U' or lines[j] == '*U'
+                        if is_u:
+                            self._out("f*")
+                    else:
+                        self._out("f*")
+                elif cmd == '*u':
+                    u = u + 1
+                elif cmd == '*U':
+                    u = u - 1
+                else:
+                    self._out(line)
+                    #print("UNHANDLED: ", cmd, line)
+
+            # restore previous graphic state
+            self._out('Q')
+
+            if link:
+                self.link(x, y, w, h, link)
+
+            return True
+
     @check_page
     def ln(self, h = None):
-        "Line Feed; default value is last cell height"
+        """ Line Feed; default value is last cell height """
         self.x = self.l_margin
         if h is None: self.y += self.lasth
         else:         self.y += h
