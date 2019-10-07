@@ -750,18 +750,6 @@ class FPDF(object):
         )]
 
     @check_page
-    def clipped_text(self, x, y, w, h, txt=''):
-        self._out(
-            sprintf('q %.2F %.2F %.2F %.2F re W S',
-                    x * self.k,
-                    (self.h-y) * self.k,
-                    w * self.k, - h * self.k,
-                    )
-        )
-        self._out("Q")
-
-
-    @check_page
     def text(self, x, y, txt = ''):
         "Output a string"
         txt = self.normalize_text(txt)
@@ -780,6 +768,18 @@ class FPDF(object):
         if (self.color_flag):
             s = 'q ' + self.text_color + ' ' + s + ' Q'
         self._out(s)
+
+    @check_page
+    def clipped_text(self, x, y, w, h, txt=''):
+        self._out(
+            sprintf('q %.2F %.2F %.2F %.2F re W n',
+                    x * self.k,
+                    (self.h - y) * self.k,
+                    w * self.k, - h * self.k,
+                    )
+        )
+        self.text(x, y, txt)
+        self._out("Q")
 
     @check_page
     def rotate(self, angle, x = None, y = None):
