@@ -750,7 +750,7 @@ class FPDF(object):
         )]
 
     @check_page
-    def text(self, x, y, txt = ''):
+    def text(self, x, y, txt=''):
         "Output a string"
         txt = self.normalize_text(txt)
         if (self.unifontsubset):
@@ -775,7 +775,7 @@ class FPDF(object):
             sprintf('q %.2F %.2F %.2F %.2F re W n',
                     x * self.k,
                     (self.h - y) * self.k,
-                    w * self.k, - h * self.k,
+                    w * self.k, -h * self.k,
                     )
         )
         self.text(x, y, txt)
