@@ -770,7 +770,7 @@ class FPDF(object):
         self._out(s)
 
     @check_page
-    def clipped_text(self, x, y, w, h, txt=''):
+    def clipped_text(self, x, y, w, h, txt='', allow_wrap=False):
         from fpdf.php import sprintf
         self._out(
             sprintf('q %.2F %.2F %.2F %.2F re W n',
@@ -780,7 +780,10 @@ class FPDF(object):
                     )
         )
 
-        self.cell(w, h, txt, border=0)
+        if allow_wrap:
+            self.multi_cell(w, h, txt, border=0)
+        else:
+            self.cell(w, h, txt, border=0)
 
         self._out("Q")
 
