@@ -777,14 +777,13 @@ class FPDF(object):
         self._out(
             sprintf('q %.2F %.2F %.2F %.2F re W n',
                     x * self.k,
-                    x * self.k,
                     (self.h - y) * self.k,
                     w * self.k, -h * self.k,
                     )
         )
 
         if allow_wrap:
-            self.multi_cell(w, h, txt, border=0)
+            self.text_box(w, h, txt)
         else:
             self.cell(w, h, txt, border=0)
 
